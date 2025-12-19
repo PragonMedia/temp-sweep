@@ -40,8 +40,10 @@
           console.log("TESTING - Debug info from clickid.php:", clickRes.debug);
         }
 
+        let clickid = null;
         if (clickRes && clickRes.ok && clickRes.clickid) {
           localStorage.setItem("rt_clickid", clickRes.clickid);
+          clickid = clickRes.clickid;
           console.log("ClickID stored in localStorage:", clickRes.clickid);
         } else {
           console.log("ClickID failed, using fallback");
@@ -49,7 +51,23 @@
           const u = new URL(location.href);
           const fromUrl = u.searchParams.get("clickid");
           const fromLS = localStorage.getItem("rt_clickid");
-          if (fromUrl && !fromLS) localStorage.setItem("rt_clickid", fromUrl);
+          if (fromUrl && !fromLS) {
+            localStorage.setItem("rt_clickid", fromUrl);
+            clickid = fromUrl;
+          } else if (fromLS) {
+            clickid = fromLS;
+          }
+        }
+
+        // Update button href after clickID is available
+        if (clickid) {
+          const btn = document.getElementById("continueClick");
+          if (btn) {
+            const domain = window.location.hostname.replace(/^www\./, '');
+            const url = 'https://trk.' + domain + '/click?clickid=' + encodeURIComponent(clickid);
+            btn.href = url;
+            console.log("Button href updated:", url);
+          }
         }
       })();
     </script>
