@@ -2,40 +2,8 @@
 // clickid.php — fetch RedTrack clickid once per session via ?format=json and return JSON
 // Call from JS: fetch('/clickid.php', { method:'POST', credentials:'include', body: new URLSearchParams({ qs: location.search, fbp: getCookie('_fbp'), fbc: getCookie('_fbc') }) })
 
-// Set error handling
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
-// Set headers early
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-
-// Handle OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(204);
-  exit;
-}
-
-// Error handler to return JSON on fatal errors
-register_shutdown_function(function () {
-  $error = error_get_last();
-  if ($error !== NULL && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-    http_response_code(200); // Return 200 with error info
-    echo json_encode([
-      'ok' => false,
-      'error' => 'PHP Error: ' . $error['message'],
-      'file' => $error['file'],
-      'line' => $error['line']
-    ]);
-  }
-});
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-  @session_start(); // Suppress warnings if session can't start
-}
 
 /* --- Config --- */
 // Function to extract domain and route from current URL
@@ -46,6 +14,7 @@ function getDomainAndRoute()
 
   // Remove www. prefix if present
   $domain = preg_replace('/^www\./', '', $domain);
+
 
   // Extract route from REQUEST_URI
   $requestUri = $_SERVER['REQUEST_URI'] ?? '';
@@ -73,15 +42,13 @@ function getDomainAndRoute()
 // Function to fetch route data from API
 function fetchRouteData($domain, $route)
 {
-  // Try to get API URL from environment variable, fallback to localhost
-  $apiBase = getenv('API_BASE_URL') ?: 'http://localhost:3000';
-  $apiUrl = $apiBase . '/api/v1/domain-route-details?domain=' . urlencode($domain) . '&route=' . urlencode($route);
+  $apiUrl = 'http://localhost:3000/api/v1/domain-route-details?domain=' . urlencode($domain) . '&route=' . urlencode($route);
 
   $ch = curl_init($apiUrl);
   curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_CONNECTTIMEOUT => 2,  // Reduced timeout for faster failure
-    CURLOPT_TIMEOUT => 3,          // Reduced timeout for faster failure
+    CURLOPT_CONNECTTIMEOUT => 5,
+    CURLOPT_TIMEOUT => 10,
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_HTTPHEADER => [
       'Accept: application/json',
@@ -93,9 +60,7 @@ function fetchRouteData($domain, $route)
   $error = curl_error($ch);
   curl_close($ch);
 
-  // Silently fail if API is unavailable - use fallback
   if ($error || $httpCode !== 200) {
-    error_log("API fetch failed for domain=$domain route=$route: $error (HTTP $httpCode)");
     return null;
   }
 
@@ -113,7 +78,7 @@ $route = $domainRoute['route'];
 //$route = "nn-new";
 
 // Fetch route data from API
-$cmpId = "68405d20d4a5e7f4cc123742"; // Fallback default
+$cmpId = "69285079be011977d0d6b53b"; // Fallback default
 
 if (!empty($domain) && !empty($route)) {
   $apiData = fetchRouteData($domain, $route);
@@ -128,21 +93,23 @@ error_log("TESTING - rtkID: " . $cmpId);
 
 
 
-define('SESSION_KEY', 'rt_clickid');
-define('SESSION_TTL', 6 * 3600);                // 6h cache
-define('RT_BASE', 'https://dx8jy.ttrk.io');
-define('COOKIE_NAME', 'rtkclickid-store');      // parity with RT JS
+const SESSION_KEY  = 'rt_clickid';
+const SESSION_TTL  = 6 * 3600;                // 6h cache
+const RT_BASE      = 'https://dx8jy.ttrk.io';
+const COOKIE_NAME  = 'rtkclickid-store';      // parity with RT JS
+
+/* --- Headers / CORS --- */
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
 
 /* --- Inputs --- */
-// Get referrer from POST data first, fallback to HTTP_REFERER header
-$referrer = $_POST['referrer'] ?? $_SERVER['HTTP_REFERER'] ?? '';
-if (empty($referrer)) {
-  // Last resort: construct from current request
-  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-  $host = $_SERVER['HTTP_HOST'] ?? '';
-  $uri = $_SERVER['REQUEST_URI'] ?? '';
-  $referrer = $scheme . '://' . $host . $uri;
-}
+$referrer = $_SERVER['HTTP_REFERER'] ?? '';   // full current page URL (ensure Referrer-Policy allows query)
 
 /* --- Cache hit? --- */
 $now = time();
@@ -222,20 +189,14 @@ $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 if ($err || $code !== 200) {
-  // Return 200 with error info instead of 502 to prevent breaking the page
-  error_log("RedTrack API failed: $err (HTTP $code) for URL: $rtUrl");
+  http_response_code(502);
   echo json_encode([
     'ok'    => false,
     'error' => 'RT request failed',
     'status' => $code,
-    'detail' => $err ?: 'HTTP ' . $code,
+    'detail' => $err,
     'url'   => $rtUrl,
-    'ref'   => $referrer,
-    'debug' => [
-      'domain' => $domain,
-      'route' => $route,
-      'rtkID' => $cmpId
-    ]
+    'ref'   => $referrer
   ]);
   exit;
 }
@@ -243,19 +204,13 @@ if ($err || $code !== 200) {
 $payload = json_decode($body, true);
 $clickid = $payload['clickid'] ?? null;
 if (!$clickid) {
-  // Return 200 with error info instead of 502
-  error_log("No clickid in RedTrack response for URL: $rtUrl. Response: " . json_encode($payload));
+  http_response_code(502);
   echo json_encode([
     'ok'    => false,
     'error' => 'No clickid in JSON',
     'url'   => $rtUrl,
     'raw'   => $payload,
-    'ref'   => $referrer,
-    'debug' => [
-      'domain' => $domain,
-      'route' => $route,
-      'rtkID' => $cmpId
-    ]
+    'ref'   => $referrer
   ]);
   exit;
 }
