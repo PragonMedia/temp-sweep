@@ -68,35 +68,6 @@
         // apply all URL changes once
         if (Object.keys(updates).length) pushParams(updates);
       })();
-
-      // Fire gtg analysis request
-      (async () => {
-        try {
-          const gtgReq = fetch("./gtg.php?" + window.location.search, {
-            method: "GET",
-            credentials: "include",
-          })
-            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-            .catch(() => null);
-
-          const gtgRes = await gtgReq;
-
-          if (gtgRes && gtgRes.success) {
-            if (gtgRes.gtg !== null) {
-              localStorage.setItem("gtg", gtgRes.gtg);
-            } else {
-              // Remove gtg from localStorage if it's null (legitimate traffic)
-              localStorage.removeItem("gtg");
-            }
-            console.log("GTG Response:", gtgRes);
-            console.log("GTG set to:", gtgRes.gtg);
-          } else {
-            console.log("GTG failed, not setting localStorage");
-          }
-        } catch (error) {
-          console.error("GTG fetch error:", error);
-        }
-      })();
     </script>
 
     <style>
