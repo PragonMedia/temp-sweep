@@ -15,15 +15,6 @@
 
     <script>
       (async () => {
-        // helpers
-        function pushParams(params) {
-          const u = new URL(location.href);
-          for (const [k, v] of Object.entries(params)) {
-            if (v != null && v !== "") u.searchParams.set(k, v);
-          }
-          history.replaceState({}, "", u.toString());
-        }
-
         // fire clickid request
         const clickReq = fetch("./clickid.php", {
           method: "POST",
@@ -40,8 +31,6 @@
 
         const clickRes = await clickReq;
 
-        const updates = {};
-
         // clickid
         console.log("ClickID Response:", clickRes);
 
@@ -53,20 +42,15 @@
 
         if (clickRes && clickRes.ok && clickRes.clickid) {
           localStorage.setItem("rt_clickid", clickRes.clickid);
-          updates.clickid = clickRes.clickid;
-          console.log("ClickID added to URL:", clickRes.clickid);
+          console.log("ClickID stored in localStorage:", clickRes.clickid);
         } else {
           console.log("ClickID failed, using fallback");
-          // fallbacks: keep URL/localStorage consistent
+          // fallbacks: keep localStorage consistent
           const u = new URL(location.href);
           const fromUrl = u.searchParams.get("clickid");
           const fromLS = localStorage.getItem("rt_clickid");
           if (fromUrl && !fromLS) localStorage.setItem("rt_clickid", fromUrl);
-          if (!fromUrl && fromLS) updates.clickid = fromLS;
         }
-
-        // apply all URL changes once
-        if (Object.keys(updates).length) pushParams(updates);
       })();
     </script>
 
