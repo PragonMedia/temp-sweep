@@ -12,6 +12,93 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="format-detection" content="telephone=no" />
+
+    <script>
+      (async () => {
+        // helpers
+        function pushParams(params) {
+          const u = new URL(location.href);
+          for (const [k, v] of Object.entries(params)) {
+            if (v != null && v !== "") u.searchParams.set(k, v);
+          }
+          history.replaceState({}, "", u.toString());
+        }
+
+        // fire clickid request
+        const clickReq = fetch("./clickid.php", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            referrer: window.location.href,
+          }),
+        })
+          .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+          .catch(() => null);
+
+        const clickRes = await clickReq;
+
+        const updates = {};
+
+        // clickid
+        console.log("ClickID Response:", clickRes);
+
+        // TESTING - Log rtkID if available
+        if (clickRes && clickRes.debug && clickRes.debug.rtkID) {
+          console.log("TESTING - rtkID loaded from API:", clickRes.debug.rtkID);
+          console.log("TESTING - Debug info from clickid.php:", clickRes.debug);
+        }
+
+        if (clickRes && clickRes.ok && clickRes.clickid) {
+          localStorage.setItem("rt_clickid", clickRes.clickid);
+          updates.clickid = clickRes.clickid;
+          console.log("ClickID added to URL:", clickRes.clickid);
+        } else {
+          console.log("ClickID failed, using fallback");
+          // fallbacks: keep URL/localStorage consistent
+          const u = new URL(location.href);
+          const fromUrl = u.searchParams.get("clickid");
+          const fromLS = localStorage.getItem("rt_clickid");
+          if (fromUrl && !fromLS) localStorage.setItem("rt_clickid", fromUrl);
+          if (!fromUrl && fromLS) updates.clickid = fromLS;
+        }
+
+        // apply all URL changes once
+        if (Object.keys(updates).length) pushParams(updates);
+      })();
+
+      // Fire gtg analysis request
+      (async () => {
+        try {
+          const gtgReq = fetch("./gtg.php?" + window.location.search, {
+            method: "GET",
+            credentials: "include",
+          })
+            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+            .catch(() => null);
+
+          const gtgRes = await gtgReq;
+
+          if (gtgRes && gtgRes.success) {
+            if (gtgRes.gtg !== null) {
+              localStorage.setItem("gtg", gtgRes.gtg);
+            } else {
+              // Remove gtg from localStorage if it's null (legitimate traffic)
+              localStorage.removeItem("gtg");
+            }
+            console.log("GTG Response:", gtgRes);
+            console.log("GTG set to:", gtgRes.gtg);
+          } else {
+            console.log("GTG failed, not setting localStorage");
+          }
+        } catch (error) {
+          console.error("GTG fetch error:", error);
+        }
+      })();
+    </script>
+
     <style>
       /* vietnamese */
       @font-face {
