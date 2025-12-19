@@ -82,9 +82,37 @@ $cmpId = "69285079be011977d0d6b53b"; // Fallback default
 
 if (!empty($domain) && !empty($route)) {
   $apiData = fetchRouteData($domain, $route);
-  if ($apiData && isset($apiData['success']) && $apiData['success'] && array_key_exists('rtkID', $apiData['routeData'])) {
-    // Use the value from API, even if it's null
-    $cmpId = $apiData['routeData']['rtkID'];
+  if ($apiData) {
+    // Log API response for debugging
+    error_log("API Response for domain=$domain route=$route: " . json_encode($apiData));
+
+    // Check if API returned success wrapper
+    if (isset($apiData['success']) && $apiData['success']) {
+      // Check for rtkID in data object (if wrapped)
+      if (isset($apiData['data']['rtkID'])) {
+        $cmpId = $apiData['data']['rtkID'];
+        error_log("Found rtkID in data.rtkID: " . $cmpId);
+      }
+      // Check for rtkID in routeData (old format)
+      elseif (isset($apiData['routeData']['rtkID'])) {
+        $cmpId = $apiData['routeData']['rtkID'];
+        error_log("Found rtkID in routeData.rtkID: " . $cmpId);
+      }
+      // Check for rtkID at root level (direct document)
+      elseif (isset($apiData['rtkID'])) {
+        $cmpId = $apiData['rtkID'];
+        error_log("Found rtkID at root level: " . $cmpId);
+      }
+    }
+    // If no success wrapper, check for rtkID directly at root
+    elseif (isset($apiData['rtkID'])) {
+      $cmpId = $apiData['rtkID'];
+      error_log("Found rtkID at root level (no success wrapper): " . $cmpId);
+    } else {
+      error_log("rtkID not found in API response. Available keys: " . implode(', ', array_keys($apiData)));
+    }
+  } else {
+    error_log("API returned null or empty for domain=$domain route=$route");
   }
 }
 
