@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 /* --- Inputs --- */
-$referrer = $_SERVER['HTTP_REFERER'] ?? '';   // full current page URL (ensure Referrer-Policy allows query)
+$referrer = $_POST['referrer'] ?? $_SERVER['HTTP_REFERER'] ?? '';   // full current page URL (prioritize POST body from JS, fallback to server header)
 
 /* --- Cache hit? --- */
 $now = time();
