@@ -78,9 +78,17 @@ $route = $domainRoute['route'];
 //$route = "nn-new";
 
 // Fetch route data from API
-$cmpId = "69285079be011977d0d6b53b"; // Fallback default
+$fallbackRtkId = "695d30597b99d8843efe802c"; // Fallback rtkID
+$cmpId = "69285079be011977d0d6b53b"; // Default fallback (old)
 
-if (!empty($domain) && !empty($route)) {
+// Check if we should use fallback rtkID
+$useFallback = isset($_POST['use_fallback']) && $_POST['use_fallback'] === '1';
+$fallbackRtkIdFromPost = $_POST['fallback_rtkid'] ?? null;
+
+if ($useFallback || !empty($fallbackRtkIdFromPost)) {
+  $cmpId = $fallbackRtkIdFromPost ?: $fallbackRtkId;
+  error_log("Using fallback rtkID: " . $cmpId);
+} elseif (!empty($domain) && !empty($route)) {
   $apiData = fetchRouteData($domain, $route);
   if ($apiData) {
     // Log API response for debugging
@@ -114,6 +122,12 @@ if (!empty($domain) && !empty($route)) {
   } else {
     error_log("API returned null or empty for domain=$domain route=$route");
   }
+}
+
+// If rtkID is still the old default or null, use the new fallback
+if ($cmpId === "69285079be011977d0d6b53b" || $cmpId === null) {
+  $cmpId = $fallbackRtkId;
+  error_log("Using fallback rtkID (default was null or old): " . $cmpId);
 }
 
 // Log rtkID for testing
