@@ -84,78 +84,23 @@ $route = $domainRoute['route'];
 //$route = "nn-new";
 
 // Fetch route data from API
-$fallbackRtkId = "695d30597b99d8843efe802c"; // Fallback rtkID
-$cmpId = null; // Start with null, will be set from API or fallback
+$cmpId = "695d30597b99d8843efe802c"; // Fallback default
 
-// Check if we should use fallback rtkID
-$useFallback = isset($_POST['use_fallback']) && $_POST['use_fallback'] === '1';
-$fallbackRtkIdFromPost = $_POST['fallback_rtkid'] ?? null;
-
-if ($useFallback || !empty($fallbackRtkIdFromPost)) {
-  $cmpId = $fallbackRtkIdFromPost ?: $fallbackRtkId;
-  error_log("Using fallback rtkID (explicit request): " . $cmpId);
-} elseif (!empty($domain) && !empty($route)) {
-  // Try to fetch from API
+if (!empty($domain) && !empty($route)) {
   $apiData = fetchRouteData($domain, $route);
-  if ($apiData) {
-    // Log API response for debugging
-    error_log("API Response for domain=$domain route=$route: " . json_encode($apiData));
-
-    // Check if API returned success wrapper
-    if (isset($apiData['success']) && $apiData['success']) {
-      // Check for rtkID in data object (if wrapped)
-      if (isset($apiData['data']['rtkID'])) {
-        $cmpId = $apiData['data']['rtkID'];
-        error_log("Found rtkID in data.rtkID: " . $cmpId);
-      }
-      // Check for rtkID in routeData (old format)
-      elseif (isset($apiData['routeData']['rtkID'])) {
-        $cmpId = $apiData['routeData']['rtkID'];
-        error_log("Found rtkID in routeData.rtkID: " . $cmpId);
-      }
-      // Check for rtkID at root level (direct document)
-      elseif (isset($apiData['rtkID'])) {
-        $cmpId = $apiData['rtkID'];
-        error_log("Found rtkID at root level: " . $cmpId);
-      }
-    }
-    // If no success wrapper, check for rtkID directly at root
-    elseif (isset($apiData['rtkID'])) {
-      $cmpId = $apiData['rtkID'];
-      error_log("Found rtkID at root level (no success wrapper): " . $cmpId);
-    } else {
-      error_log("rtkID not found in API response. Available keys: " . implode(', ', array_keys($apiData)));
-    }
+  if ($apiData && isset($apiData['success']) && $apiData['success'] && array_key_exists('rtkID', $apiData['routeData'])) {
+    // Use the value from API, even if it's null
+    $cmpId = $apiData['routeData']['rtkID'];
+    error_log("API Response - rtkID pulled from API: " . ($cmpId ?? 'null'));
   } else {
-    error_log("API returned null or empty for domain=$domain route=$route");
-    // Log curl error if available
-    $ch = curl_init('http://localhost:3000/api/v1/domain-route-details?domain=' . urlencode($domain) . '&route=' . urlencode($route));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 2);
-    curl_exec($ch);
-    $curlError = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($curlError) {
-      error_log("CURL Error: " . $curlError);
-    }
-    if ($httpCode && $httpCode !== 200) {
-      error_log("HTTP Code: " . $httpCode);
-    }
+    error_log("API Response - Using fallback rtkID: " . $cmpId);
   }
 } else {
-  error_log("Domain or route is empty - domain='$domain' route='$route'");
-}
-
-// If rtkID is still null after trying API, use the fallback
-if ($cmpId === null) {
-  $cmpId = $fallbackRtkId;
-  error_log("Using fallback rtkID (no rtkID found from API): " . $cmpId);
+  error_log("API Request - Missing domain/route, using fallback rtkID: " . $cmpId);
 }
 
 // Log rtkID for testing
-error_log("TESTING - rtkID: " . $cmpId);
+error_log("FINAL - rtkID being used: " . ($cmpId ?? 'null'));
 
 
 
@@ -175,11 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 /* --- Inputs --- */
-$referrer = $_POST['referrer'] ?? $_SERVER['HTTP_REFERER'] ?? '';   // full current page URL (prioritize POST body from JS, fallback to server header)
+$referrer = $_SERVER['HTTP_REFERER'] ?? '';   // full current page URL (ensure Referrer-Policy allows query)
 
 /* --- Cache hit? --- */
 $now = time();
 if (!empty($_SESSION[SESSION_KEY]) && !empty($_SESSION[SESSION_KEY . '_ts']) && ($now - $_SESSION[SESSION_KEY . '_ts']) < SESSION_TTL) {
+  error_log("📋 clickid - Using cached clickid: " . $_SESSION[SESSION_KEY]);
+  error_log("📋 rtkID - Being used (cached): " . ($cmpId ?? 'null'));
   echo json_encode([
     'ok'      => true,
     'clickid' => (string)$_SESSION[SESSION_KEY],
@@ -295,6 +242,8 @@ setcookie(COOKIE_NAME, $clickid, [
 ]);
 
 /* --- Return --- */
+error_log("✅ clickid - Successfully minted: " . $clickid);
+error_log("📋 rtkID - Used for RedTrack request: " . ($cmpId ?? 'null'));
 echo json_encode([
   'ok'      => true,
   'clickid' => $clickid,
