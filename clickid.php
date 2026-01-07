@@ -61,10 +61,16 @@ function fetchRouteData($domain, $route)
   curl_close($ch);
 
   if ($error || $httpCode !== 200) {
+    error_log("fetchRouteData failed - URL: $apiUrl, HTTP Code: $httpCode, Error: $error");
     return null;
   }
 
   $data = json_decode($response, true);
+  if (json_last_error() !== JSON_ERROR_NONE) {
+    error_log("fetchRouteData JSON decode error: " . json_last_error_msg() . " - Response: " . substr($response, 0, 500));
+    return null;
+  }
+
   return $data;
 }
 
@@ -79,7 +85,7 @@ $route = $domainRoute['route'];
 
 // Fetch route data from API
 $fallbackRtkId = "695d30597b99d8843efe802c"; // Fallback rtkID
-$cmpId = "69285079be011977d0d6b53b"; // Default fallback (old)
+$cmpId = null; // Start with null, will be set from API or fallback
 
 // Check if we should use fallback rtkID
 $useFallback = isset($_POST['use_fallback']) && $_POST['use_fallback'] === '1';
@@ -87,8 +93,9 @@ $fallbackRtkIdFromPost = $_POST['fallback_rtkid'] ?? null;
 
 if ($useFallback || !empty($fallbackRtkIdFromPost)) {
   $cmpId = $fallbackRtkIdFromPost ?: $fallbackRtkId;
-  error_log("Using fallback rtkID: " . $cmpId);
+  error_log("Using fallback rtkID (explicit request): " . $cmpId);
 } elseif (!empty($domain) && !empty($route)) {
+  // Try to fetch from API
   $apiData = fetchRouteData($domain, $route);
   if ($apiData) {
     // Log API response for debugging
@@ -121,13 +128,30 @@ if ($useFallback || !empty($fallbackRtkIdFromPost)) {
     }
   } else {
     error_log("API returned null or empty for domain=$domain route=$route");
+    // Log curl error if available
+    $ch = curl_init('http://localhost:3000/api/v1/domain-route-details?domain=' . urlencode($domain) . '&route=' . urlencode($route));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+    curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($curlError) {
+      error_log("CURL Error: " . $curlError);
+    }
+    if ($httpCode && $httpCode !== 200) {
+      error_log("HTTP Code: " . $httpCode);
+    }
   }
+} else {
+  error_log("Domain or route is empty - domain='$domain' route='$route'");
 }
 
-// If rtkID is still the old default or null, use the new fallback
-if ($cmpId === "69285079be011977d0d6b53b" || $cmpId === null) {
+// If rtkID is still null after trying API, use the fallback
+if ($cmpId === null) {
   $cmpId = $fallbackRtkId;
-  error_log("Using fallback rtkID (default was null or old): " . $cmpId);
+  error_log("Using fallback rtkID (no rtkID found from API): " . $cmpId);
 }
 
 // Log rtkID for testing
