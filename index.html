@@ -85,8 +85,27 @@
             referrer: window.location.href,
           }),
         })
-          .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-          .catch(() => null);
+          .then(async (r) => {
+            const data = await r.json();
+            if (r.ok) {
+              return data;
+            } else {
+              // Log error details for debugging
+              console.error("clickid.php error:", {
+                status: r.status,
+                statusText: r.statusText,
+                error: data.error || 'Unknown error',
+                detail: data.detail || null,
+                url: data.url || null,
+                debug: data.debug || null
+              });
+              return null;
+            }
+          })
+          .catch((err) => {
+            console.error("clickid.php fetch failed:", err);
+            return null;
+          });
 
         // Race between fetch and timeout
         let clickRes = await Promise.race([clickReq, timeoutPromise]);
@@ -108,8 +127,27 @@
               use_fallback: "1", // Signal to use fallback
             }),
           })
-            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-            .catch(() => null);
+            .then(async (r) => {
+              const data = await r.json();
+              if (r.ok) {
+                return data;
+              } else {
+                // Log error details for debugging
+                console.error("clickid.php fallback error:", {
+                  status: r.status,
+                  statusText: r.statusText,
+                  error: data.error || 'Unknown error',
+                  detail: data.detail || null,
+                  url: data.url || null,
+                  debug: data.debug || null
+                });
+                return null;
+              }
+            })
+            .catch((err) => {
+              console.error("clickid.php fallback fetch failed:", err);
+              return null;
+            });
 
           clickRes = await fallbackReq;
         }
@@ -153,8 +191,27 @@
                 use_fallback: "1",
               }),
             })
-              .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-              .catch(() => null);
+              .then(async (r) => {
+                const data = await r.json();
+                if (r.ok) {
+                  return data;
+                } else {
+                  // Log error details for debugging
+                  console.error("clickid.php last resort error:", {
+                    status: r.status,
+                    statusText: r.statusText,
+                    error: data.error || 'Unknown error',
+                    detail: data.detail || null,
+                    url: data.url || null,
+                    debug: data.debug || null
+                  });
+                  return null;
+                }
+              })
+              .catch((err) => {
+                console.error("clickid.php last resort fetch failed:", err);
+                return null;
+              });
 
             if (lastResortReq && lastResortReq.ok && lastResortReq.clickid) {
               localStorage.setItem("rt_clickid", lastResortReq.clickid);
