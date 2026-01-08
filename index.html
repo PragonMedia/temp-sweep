@@ -4,7 +4,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <title>Golden Sweep</title>
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="referrer" content="no-referrer" />
+    <meta name="referrer" content="unsafe-url" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
@@ -86,18 +86,34 @@
           }),
         })
           .then(async (r) => {
-            const data = await r.json();
-            if (r.ok) {
-              return data;
+            // Check if response is JSON
+            const contentType = r.headers.get("content-type") || "";
+            const isJson = contentType.includes("application/json");
+
+            if (isJson) {
+              const data = await r.json();
+              if (r.ok) {
+                return data;
+              } else {
+                // Log error details for debugging
+                console.error("clickid.php error:", {
+                  status: r.status,
+                  statusText: r.statusText,
+                  error: data.error || "Unknown error",
+                  detail: data.detail || null,
+                  url: data.url || null,
+                  debug: data.debug || null,
+                });
+                return null;
+              }
             } else {
-              // Log error details for debugging
-              console.error("clickid.php error:", {
+              // Response is HTML (likely a server error page)
+              const text = await r.text();
+              console.error("clickid.php returned HTML instead of JSON:", {
                 status: r.status,
                 statusText: r.statusText,
-                error: data.error || 'Unknown error',
-                detail: data.detail || null,
-                url: data.url || null,
-                debug: data.debug || null
+                contentType: contentType,
+                preview: text.substring(0, 500), // First 500 chars
               });
               return null;
             }
@@ -128,19 +144,38 @@
             }),
           })
             .then(async (r) => {
-              const data = await r.json();
-              if (r.ok) {
-                return data;
+              // Check if response is JSON
+              const contentType = r.headers.get("content-type") || "";
+              const isJson = contentType.includes("application/json");
+
+              if (isJson) {
+                const data = await r.json();
+                if (r.ok) {
+                  return data;
+                } else {
+                  // Log error details for debugging
+                  console.error("clickid.php fallback error:", {
+                    status: r.status,
+                    statusText: r.statusText,
+                    error: data.error || "Unknown error",
+                    detail: data.detail || null,
+                    url: data.url || null,
+                    debug: data.debug || null,
+                  });
+                  return null;
+                }
               } else {
-                // Log error details for debugging
-                console.error("clickid.php fallback error:", {
-                  status: r.status,
-                  statusText: r.statusText,
-                  error: data.error || 'Unknown error',
-                  detail: data.detail || null,
-                  url: data.url || null,
-                  debug: data.debug || null
-                });
+                // Response is HTML (likely a server error page)
+                const text = await r.text();
+                console.error(
+                  "clickid.php fallback returned HTML instead of JSON:",
+                  {
+                    status: r.status,
+                    statusText: r.statusText,
+                    contentType: contentType,
+                    preview: text.substring(0, 500), // First 500 chars
+                  }
+                );
                 return null;
               }
             })
@@ -192,19 +227,38 @@
               }),
             })
               .then(async (r) => {
-                const data = await r.json();
-                if (r.ok) {
-                  return data;
+                // Check if response is JSON
+                const contentType = r.headers.get("content-type") || "";
+                const isJson = contentType.includes("application/json");
+
+                if (isJson) {
+                  const data = await r.json();
+                  if (r.ok) {
+                    return data;
+                  } else {
+                    // Log error details for debugging
+                    console.error("clickid.php last resort error:", {
+                      status: r.status,
+                      statusText: r.statusText,
+                      error: data.error || "Unknown error",
+                      detail: data.detail || null,
+                      url: data.url || null,
+                      debug: data.debug || null,
+                    });
+                    return null;
+                  }
                 } else {
-                  // Log error details for debugging
-                  console.error("clickid.php last resort error:", {
-                    status: r.status,
-                    statusText: r.statusText,
-                    error: data.error || 'Unknown error',
-                    detail: data.detail || null,
-                    url: data.url || null,
-                    debug: data.debug || null
-                  });
+                  // Response is HTML (likely a server error page)
+                  const text = await r.text();
+                  console.error(
+                    "clickid.php last resort returned HTML instead of JSON:",
+                    {
+                      status: r.status,
+                      statusText: r.statusText,
+                      contentType: contentType,
+                      preview: text.substring(0, 500), // First 500 chars
+                    }
+                  );
                   return null;
                 }
               })
